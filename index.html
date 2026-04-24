@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Leaf Evolution: Cosmic Update 2.1</title>
+    <style>
+        :root { --primary: #1b5e20; --bg-day: #f1f8e9; --bg-night: #0a0f1d; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; display: flex; height: 100vh; width: 100vw; overflow: hidden; transition: background 2s; }
+        body.day { background-color: var(--bg-day); color: #1b5e20; }
+        body.night { background-color: var(--bg-night); color: #c9d1d9; }
+
+        #top-bar { position: absolute; top: 15px; left: 15px; display: flex; gap: 8px; z-index: 20; flex-wrap: wrap; max-width: 90%; }
+        .top-btn { padding: 8px 12px; background: #2e7d32; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; font-size: 0.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        .top-btn.save { background: #0277bd; }
+        .top-btn.achieve { background: #fbc02d; color: #333; }
+        .top-btn.update { background: #8e24aa; animation: pulse 2s infinite; }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        #game-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        #points { font-size: 3rem; font-weight: bold; margin-bottom: 5px; text-align: center; padding: 0 10px; word-wrap: break-word; max-width: 100%; }
+        #leaf-display { font-size: 130px; cursor: pointer; user-select: none; transition: transform 0.1s; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.3)); z-index: 5; margin-top: 15px; }
+        #leaf-display:active { transform: scale(0.85); }
+
+        #sidebar { width: 280px; background: white; border-left: 3px solid #c8e6c9; display: flex; flex-direction: column; padding: 15px; overflow-y: auto; color: #333; z-index: 10; box-sizing: border-box; }
+        .upgrade-btn { width: 100%; background: #f9f9f9; border: 2px solid #eee; border-radius: 12px; padding: 10px; margin-bottom: 10px; cursor: pointer; text-align: left; }
+        .upgrade-btn.maxed { background: #fff9c4 !important; border-color: #fbc02d !important; }
+        .endless-item { border-color: #9c27b0; background: #f3e5f5; }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; width: 90%; max-width: 450px; border-radius: 20px; padding: 20px; position: relative; max-height: 80vh; overflow-y: auto; color: #333; }
+        .close-btn { position: absolute; top: 10px; right: 20px; font-size: 2rem; cursor: pointer; }
+        
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 15px; }
+        .card { background: #f1f8e9; padding: 10px; border-radius: 10px; text-align: center; border: 1px solid #ddd; font-size: 0.8rem; }
+        .card.locked { opacity: 0.3; filter: blur(2px); }
+
+        #win-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1b5e20; color: white; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; text-align: center; }
+        .win-btn { padding: 12px 24px; font-size: 1rem; border-radius: 25px; border: none; cursor: pointer; font-weight: bold; margin: 10px; }
+
+        .pop { position: absolute; pointer-events: none; font-weight: bold; animation: float 0.7s forwards; z-index: 100; }
+        @keyframes float { 0% { opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
+
+        /* MAGIA PARA O CELULAR (Corrige o sumiço da loja) */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #game-area { flex: none; height: 50vh; justify-content: flex-end; padding-bottom: 20px; }
+            #sidebar { width: 100%; height: 50vh; border-left: none; border-top: 3px solid #c8e6c9; }
+            #points { font-size: 2.5rem; }
+            #top-bar { top: 10px; }
+        }
+    </style>
+</head>
+<body class="day">
+
+    <div id="top-bar">
+        <button class="top-btn" onclick="openModal('index-modal'); renderIndex();">📖 Coleção</button>
+        <button class="top-btn achieve" onclick="openModal('achieve-modal'); renderAchievements();">🏆 Conquistas</button>
+        <button class="top-btn save" onclick="saveGame()">💾 Salvar</button>
+        <button class="top-btn update" onclick="checkUpdate()">✨ Patch 2.1</button>
+    </div>
+
+    <div id="index-modal" class="modal" onclick="if(event.target == this) closeModal('index-modal')">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('index-modal')">&times;</span>
+            <h2 style="text-align: center;">Álbum Botânico</h2>
+            <div class="grid" id="leaf-grid"></div>
+        </div>
+    </div>
+
+    <div id="achieve-modal" class="modal" onclick="if(event.target == this) closeModal('achieve-modal')">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('achieve-modal')">&times;</span>
+            <h2 style="text-align: center;">Troféus</h2>
+            <div id="achieve-list"></div>
+        </div>
+    </div>
+
+    <div id="win-screen">
+        <div style="font-size: 100px;">🌲</div>
+        <h1>A Grande Árvore!</h1>
+        <button class="win-btn" style="background:#e53935; color:white" onclick="hardReset()">Resetar</button>
+        <button class="win-btn" style="background:#ffeb3b" onclick="startEndless()">Modo Infinito</button>
+    </div>
+
+    <div id="game-area">
+        <div id="points">0</div>
+        <div id="status-label" style="font-size: 0.9rem; font-weight: bold;">☀️ Dia (+80% Click)</div>
+        <div id="leaf-display" onclick="handleClick(event)">🍂</div>
+    </div>
+
+    <div id="sidebar">
+        <h3 style="margin:0 0 10px; font-size: 1rem;">Loja Cósmica (Máx 15)</h3>
+        <div id="shop"></div>
+    </div>
+
+    <script>
+        let points = 0;
+        let isWon = false;
+        let isEndless = false;
+        let isDay = true;
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(f, type, dur) {
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(f, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + dur);
+            } catch(e) {}
+        }
+
+        const phases = [
+            { pts: 0, icon: '🍂', name: 'Seca' }, { pts: 500, icon: '🍀', name: 'Trevo' },
+            { pts: 800, icon: '🥀', name: 'Murcha' }, { pts: 1000, icon: '🍃', name: 'Vento' },
+            { pts: 1500, icon: '🌿', name: 'Ramos' }, { pts: 3000, icon: '🌱', name: 'Broto' },
+            { pts: 4000, icon: '🪴', name: 'Vaso' }, { pts: 8000, icon: '🌾', name: 'Planta' },
+            { pts: 25000, icon: '🌹', name: 'Rosa' }, { pts: 30000, icon: '🌼', name: 'Margarida' },
+            { pts: 75000, icon: '☘️', name: 'Trevo 3' }, { pts: 100000, icon: '🍁', name: 'Bordo' },
+            { pts: 200000, icon: '🏵️', name: 'Circular' }, { pts: 300000, icon: '🌷', name: 'Tulipa' },
+            { pts: 400000, icon: '💐', name: 'Buquê' }, { pts: 500000, icon: '🪷', name: 'Lótus' },
+            { pts: 600000, icon: '🌻', name: 'Girassol' }, { pts: 700000, icon: '🪻', name: 'Jacinto' },
+            { pts: 800000, icon: '❇️', name: 'Faísca Vital' }, { pts: 900000, icon: '💮', name: 'Flor Branca' },
+            { pts: 1000000, icon: '🌲', name: 'Árvore' }, { pts: 1000000000000, icon: '🌌', name: 'Cosmos' }
+        ];
+
+        // A ordem aqui foi preservada para não estragar o seu save! Novos itens estão no final.
+        const shopItems = [
+            { id: 'h2o', name: '💧 Água', baseCost: 15, pwr: 1, type: 'click', lvl: 0, endlessOnly: false },
+            { id: 'sol', name: '☀️ Sol', baseCost: 120, pwr: 5, type: 'auto', lvl: 0, endlessOnly: false },
+            { id: 'bee', name: '🐝 Abelha', baseCost: 1000, pwr: 35, type: 'auto', lvl: 0, endlessOnly: false },
+            { id: 'chuva', name: '🌧️ Chuva', baseCost: 5000, pwr: 150, type: 'click', lvl: 0, endlessOnly: false },
+            { id: 'vento', name: '🌪️ Vento', baseCost: 30000, pwr: 900, type: 'auto', lvl: 0, endlessOnly: false },
+            { id: 'volcano', name: '🌋 Vulcão', baseCost: 180000, pwr: 5000, type: 'auto', lvl: 0, endlessOnly: false },
+            { id: 'genetic', name: '🧬 DNA', baseCost: 450000, pwr: 18000, type: 'click', lvl: 0, endlessOnly: false },
+            { id: 'meteoro', name: '☄️ Meteoro', baseCost: 900000, pwr: 35000, type: 'auto', lvl: 0, endlessOnly: false },
+            { id: 'alien', name: '🛸 Alien', baseCost: 2500000, pwr: 90000, type: 'click', lvl: 0, endlessOnly: false },
+            { id: 'tempo', name: '⏳ Tempo', baseCost: 10000000, pwr: 600000, type: 'auto', lvl: 0, endlessOnly: true },
+            { id: 'escura', name: '🌌 Escura', baseCost: 200000000, pwr: 2500000, type: 'click', lvl: 0, endlessOnly: true },
+            { id: 'terra', name: '🪐 Terra', baseCost: 6000000000, pwr: 60000000, type: 'auto', lvl: 0, endlessOnly: true },
+            { id: 'deus', name: '✨ Divino', baseCost: 120000000000, pwr: 1200000000, type: 'click', lvl: 0, endlessOnly: true },
+            // NOVOS UPGRADES ADICIONADOS AQUI PARA O PATCH 2.1
+            { id: 'buraco', name: '🕳️ Buraco Negro', baseCost: 25000000000, pwr: 250000000, type: 'auto', lvl: 0, endlessOnly: true }, // 25 Bi
+            { id: 'galaxia', name: '🌀 Galáxia', baseCost: 400000000000, pwr: 4000000000, type: 'click', lvl: 0, endlessOnly: true } // 400 Bi
+        ];
+
+        const achievements = [
+            { id: 'a1', icon: '🌱', name: 'Início', req: () => points >= 1000, done: false },
+            { id: 'a2', icon: '🌲', name: 'Mestre', req: () => points >= 1000000, done: false },
+            { id: 'a3', icon: '♾️', name: 'Infinito', req: () => isEndless, done: false }
+        ];
+
+        function getCost(item) { return Math.floor(item.baseCost * Math.pow(1.85, item.lvl)); }
+        function getClickPower() { let p = 1; shopItems.forEach(i => { if(i.type === 'click') p += (i.pwr * i.lvl); }); return p; }
+        function getAutoPower() { let p = 0; shopItems.forEach(i => { if(i.type === 'auto') p += (i.pwr * i.lvl); }); return p; }
+
+        function saveGame() {
+            const data = { pts: points, won: isWon, endless: isEndless, lvls: shopItems.map(i => i.lvl), ach: achievements.map(a => a.done) };
+            localStorage.setItem('leafSaveV2', JSON.stringify(data));
+            alert('Progresso salvo!');
+        }
+
+        function loadGame() {
+            const saved = localStorage.getItem('leafSaveV2');
+            if(saved) {
+                const data = JSON.parse(saved);
+                points = data.pts; isWon = data.won; isEndless = data.endless;
+                data.lvls.forEach((l, idx) => { if(shopItems[idx]) shopItems[idx].lvl = l; });
+                if(data.ach) data.ach.forEach((d, idx) => { if(achievements[idx]) achievements[idx].done = d; });
+            }
+            buildShop(); updateUI();
+        }
+
+        function checkUpdate() {
+            alert("Patch 2.1: Layout Mobile Corrigido! A loja agora fica embaixo do jogo e não some mais. Adicionados 'Buraco Negro' e 'Galáxia' para a jornada do Bilhão ao Trilhão!");
+        }
+
+        function hardReset() { if(confirm("Resetar tudo?")) { localStorage.clear(); location.reload(); } }
+        function startEndless() { isEndless = true; document.getElementById('win-screen').style.display = 'none'; buildShop(); updateUI(); }
+
+        function buildShop() {
+            const shopDiv = document.getElementById('shop');
+            shopDiv.innerHTML = '';
+            
+            // Ordena os itens visualmente pelo preço, para os novos ficarem na posição certa!
+            let itemsParaRenderizar = [...shopItems].sort((a, b) => a.baseCost - b.baseCost);
+
+            itemsParaRenderizar.forEach(item => {
+                if(item.endlessOnly && !isEndless) return;
+                const btn = document.createElement('button');
+                btn.className = 'upgrade-btn' + (item.endlessOnly ? ' endless-item' : '');
+                btn.id = item.id;
+                btn.onclick = () => {
+                    const cost = getCost(item);
+                    if(points >= cost && item.lvl < 15) {
+                        points -= cost; item.lvl++;
+                        playSound(880, 'sine', 0.1); updateUI();
+                    }
+                };
+                btn.innerHTML = `<b>${item.name}</b><br>Custo: <span id="c-${item.id}">0</span><br><small id="l-${item.id}">Lvl: 0/15</small>`;
+                shopDiv.appendChild(btn);
+            });
+        }
+
+        function handleClick(e) {
+            if (isWon && !isEndless) return;
+            let cp = getClickPower();
+            let final = isDay ? Math.floor(cp * 1.8) : cp;
+            points += final;
+            createPop(e.clientX, e.clientY, final);
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('points').innerText = Math.floor(points).toLocaleString('pt-BR');
+            let icon = phases[0].icon;
+            phases.forEach(p => { if(points >= p.pts) icon = p.icon; });
+            document.getElementById('leaf-display').innerText = icon;
+
+            if(points >= 1000000 && !isWon && !isEndless) { isWon = true; document.getElementById('win-screen').style.display = 'flex'; }
+
+            shopItems.forEach(item => {
+                if(item.endlessOnly && !isEndless) return;
+                const b = document.getElementById(item.id);
+                if(!b) return; // Segurança extra
+                const cost = getCost(item);
+                if(item.lvl >= 15) { b.classList.add('maxed'); b.disabled = true; document.getElementById('c-' + item.id).innerText = "MAX"; }
+                else { b.disabled = points < cost; document.getElementById('c-' + item.id).innerText = cost.toLocaleString('pt-BR'); }
+                document.getElementById('l-' + item.id).innerText = `Lvl: ${item.lvl}/15`;
+            });
+
+            achievements.forEach(a => { if(!a.done && a.req()) a.done = true; });
+        }
+
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function renderIndex() {
+            const grid = document.getElementById('leaf-grid');
+            grid.innerHTML = '';
+            phases.forEach(p => {
+                const unlocked = points >= p.pts;
+                grid.innerHTML += `<div class="card ${unlocked ? '' : 'locked'}"><span>${unlocked ? p.icon : '?'}</span><p>${unlocked ? p.name : '???'}</p></div>`;
+            });
+        }
+
+        function renderAchievements() {
+            const list = document.getElementById('achieve-list');
+            list.innerHTML = '';
+            achievements.forEach(a => {
+                list.innerHTML += `<div style="padding:10px; border-bottom:1px solid #eee; display:flex; gap:10px; align-items:center; opacity:${a.done?1:0.5}">
+                    <span style="font-size:2rem">${a.icon}</span>
+                    <div><b>${a.name}</b><br><small>${a.done?'Concluída':'Bloqueada'}</small></div>
+                </div>`;
+            });
+        }
+
+        function createPop(x, y, val) {
+            const p = document.createElement('div');
+            p.className = 'pop'; p.style.left = x + 'px'; p.style.top = y + 'px';
+            p.innerText = '+' + val.toLocaleString('pt-BR'); p.style.color = isDay ? '#1b5e20' : '#888';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 700);
+        }
+
+        setInterval(() => {
+            isDay = !isDay;
+            document.body.className = isDay ? 'day' : 'night';
+            document.getElementById('status-label').innerText = isDay ? '☀️ Dia (+80% Click)' : '🌙 Noite (+5 pts/s)';
+        }, 15000);
+
+        setInterval(() => {
+            if(!isWon || isEndless) {
+                let gain = getAutoPower() / 10;
+                if(!isDay) gain += 0.5;
+                points += gain;
+                updateUI();
+            }
+        }, 100);
+
+        loadGame();
+    </script>
+</body>
+</html>
